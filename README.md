@@ -26,6 +26,7 @@ Amazon Athena 是一种交互式查询服务，让您能够轻松使用标准 SQ
 利用Amazon CLI或者控制台检查Amazon S3路径下是否正确上传了日志文件，（注：本方案没有对上传到S3的数据进行分区存放，可以参考下文CloudTrail日志的方式利用Athena的分区投影功能实现自动分区管理）。
  
 ## 创建Athena历史记录日志表
+```
 CREATE EXTERNAL TABLE athena_queries (
     QueryExecutionId string,
     Query string,
@@ -36,11 +37,14 @@ CREATE EXTERNAL TABLE athena_queries (
 )
 ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'
 LOCATION 's3://quandata1/athena_his';
+```
+
 
 ## 创建CloudTrail日志表
 开启CloudTrail跟踪，将CloudTrail日志通过跟踪功能持续保存到S3中。
   
 ## 创建CloudTrail日志表cloudtrail_logs，建表语句中LOCATION根据实际跟踪配置的S3路径填写。使用Athena分区投影功能自动进行分区管理，降低查询时间和数据扫描量。
+```
 CREATE EXTERNAL TABLE cloudtrail_logs(
     eventVersion STRING,
     userIdentity STRUCT<
@@ -101,22 +105,27 @@ TBLPROPERTIES (
   'projection.timestamp.range'='2021/01/01,NOW', 
   'projection.timestamp.type'='date', 
   'storage.location.template'='s3://bucket/AWSLogs/account-id/CloudTrail/aws-region/${timestamp}')
-
+```
 ## 使用Athena对数据进行分析
 
 查看不同SQL语句的执行总次数排名
+```
 select count(*),query from athena_queries group by query order by 1 desc limit 10
-
+```
 查看执行状态失败的SQL总数
+```
 select count(*) from athena_queries where status.state='FAILED'
-
+```
 查看执行超过特定执行时长的历史SQL
+```
 select query from athena_queries where statistics.totalexecutiontimeinmillis >=5000
-
+```
 查看超过特定数据扫描量的历史SQL
+```
 select query from athena_queries where statistics.datascannedinbytes >=10741612544
-
+```
 根据IAM用户统计数据扫描量
+```
 select sum(b.statistics.datascannedinbytes),
 a.userIdentity.username 
 from 
@@ -127,8 +136,10 @@ a.eventsource='athena.amazonaws.com' and a.eventName='StartQueryExecution' and
 a.responseElements != 'null' and substr(a.responseElements,22,36) = b.queryexecutionid 
 group by 
 a.userIdentity.username
+```
 使用Amazon Quicksight可视化分析结果
 利用SQL的方式（将cloudtrail_logs和athena_queries两张表联表查询）创建QuickSight中Athena数据集，然后根据实际需要在Amazon QuickSight创建可视化图表。
+```
 select 
 b.queryexecutionid,
 b.query,
@@ -150,6 +161,7 @@ athena_queries b
 where 
 a.eventsource='athena.amazonaws.com' and a.eventName='StartQueryExecution' and 
 a.responseElements != 'null' and substr(a.responseElements,22,36) = b.queryexecutionid 
+```
 
 创建可视化图表如下
  
